@@ -1,4 +1,5 @@
 import { ConnectButton } from '@/components/ConnectButton'
+import { SwapCard } from '@/components/SwapCard'
 
 export default function Home() {
   return (
@@ -7,6 +8,7 @@ export default function Home() {
         <ConnectButton />
       </div>
       <h1 className="text-2xl font-bold mt-8">Mini DEX</h1>
+      <SwapCard />
     </main>
   )
 }
