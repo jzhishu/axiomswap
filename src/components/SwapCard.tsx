@@ -5,6 +5,7 @@
  'use client'
 
 import { ERC20_ABI, TOKEN_LIST, TokenInfo } from "@/contracts/contracts";
+import { useQuote } from "@/hooks/useQuote";
 import { useState } from "react";
 import { formatUnits } from "viem";
 import { sepolia } from "viem/chains";
@@ -27,6 +28,8 @@ import { useBalance, useConnection, useReadContract } from "wagmi";
 		}
 	})
 
+	const { amountOut, isLoading: isQuoteLoading, error: quoteError } = useQuote({tokenIn, tokenOut, amountIn})
+
 	  // 切换代币方向（常见 DEX 交互：点击箭头翻转输入输出）
 	  const handleFlip = () => {
 		setTokenIn(tokenOut)
@@ -43,6 +46,17 @@ import { useBalance, useConnection, useReadContract } from "wagmi";
 			handleFlip()
 		  } else {
 			setTokenIn(selected)
+		  }
+		}
+	  }
+
+	  const handleTokenOutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+		const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
+		if (selected) {
+		  if (selected.address === tokenIn.address) {
+			handleFlip()
+		  } else {
+			setTokenOut(selected)
 		  }
 		}
 	  }
@@ -106,16 +120,56 @@ import { useBalance, useConnection, useReadContract } from "wagmi";
 			<button></button>
 
 			{/* === 输出端 === */}
-			<div style={styles.tokenRow}></div>
+			<div style={styles.tokenRow}>
+				<label style={styles.label}>To</label>
+				<div style={styles.inputGroup}>
+					<input
+						type="text"
+						placeholder="0.0"
+						value={isQuoteLoading ? '查询中...' : amountOut ?? ''}
+						readOnly
+						style={{ ...styles.input, ...styles.inputReadonly }}
+					/>
+					<select
+						value={tokenOut.address}
+						onChange={handleTokenOutChange}
+						style={styles.select}
+					>
+						{TOKEN_LIST.map((token) => (
+							<option key={token.address} value={token.address}>
+								{token.symbol}
+							</option>
+						))}
+					</select>
+				</div>
+			</div>
 
 			{/* === 汇率显示 === */}
-			<div style={styles.rateInfo}></div>
+			{amountOut && amountIn && Number(amountIn) > 0 && (
+				<div style={styles.rateInfo}>
+					1 {tokenIn.symbol} ≈ {(Number(amountOut) / Number(amountIn)).toFixed(8)} {tokenOut.symbol}
+				</div>
+			)}
 
 			{/* === 错误提示 === */}
-			<div style={styles.error}></div>
+			{quoteError && (
+				<div style={styles.error}>
+					报价失败：{quoteError.slice(0, 100)}
+					{quoteError.length > 100 ? '...' : ''}
+				</div>
+			)}
 
 			{/* === Swap 按钮（暂不可用，下一步实现） === */}
-			<button style={styles.swapButton}></button>
+			<button
+				disabled
+				style={{ ...styles.swapButton, ...styles.swapButtonDisabled }}
+			>
+				{!amountIn
+				? '输入金额'
+				: isQuoteLoading
+					? '查询报价中...'
+					: 'Swap（下一步实现）'}
+			</button>
 		</div>
 	)
  }
