@@ -117,7 +117,9 @@ import { useBalance, useConnection, useReadContract } from "wagmi";
 			</div>
 
 			{/* === 翻转按钮 === */}
-			<button></button>
+			<button onClick={handleFlip} style={styles.flipButton}>
+				↕
+			</button>
 
 			{/* === 输出端 === */}
 			<div style={styles.tokenRow}>
