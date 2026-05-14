@@ -7,7 +7,8 @@
 import { ERC20_ABI, TOKEN_LIST, TokenInfo } from "@/contracts/contracts";
 import { useApprove } from "@/hooks/useApprove";
 import { useQuote } from "@/hooks/useQuote";
-import { useMemo, useState } from "react";
+import { useSwap } from "@/hooks/useSwap";
+import { useCallback, useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useConnection, useReadContract } from "wagmi";
 
@@ -30,7 +31,9 @@ import { useConnection, useReadContract } from "wagmi";
 
 	const { amountOut, isLoading: isQuoteLoading, error: quoteError } = useQuote({tokenIn, tokenOut, amountIn})
 
-	const { allowance, approve, isPending, error } = useApprove({ owner: address!, token: tokenIn })
+	const { allowance, approve, isPending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
+
+	const { swap, error: swapError, isSuccess: isSwapSuccess } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address! })
 
 	const needApprove = useMemo(() => {
 		if (!allowance) return true;
@@ -43,34 +46,44 @@ import { useConnection, useReadContract } from "wagmi";
 
 	// 切换代币方向（常见 DEX 交互：点击箭头翻转输入输出）
 	const handleFlip = () => {
-	setTokenIn(tokenOut)
-	setTokenOut(tokenIn)
-	setAmountIn('')
+		setTokenIn(tokenOut)
+		setTokenOut(tokenIn)
+		setAmountIn('')
 	}
 
 	// 代币选择处理
 	const handleTokenInChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-	const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
-	if (selected) {
-		// 如果选的跟输出代币一样，就翻转
-		if (selected.address === tokenOut.address) {
-		handleFlip()
-		} else {
-		setTokenIn(selected)
+		const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
+		if (selected) {
+			// 如果选的跟输出代币一样，就翻转
+			if (selected.address === tokenOut.address) {
+				handleFlip()
+			} else {
+				setTokenIn(selected)
+			}
 		}
-	}
 	}
 
 	const handleTokenOutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-	const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
-	if (selected) {
-		if (selected.address === tokenIn.address) {
-		handleFlip()
-		} else {
-		setTokenOut(selected)
+		const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
+		if (selected) {
+			if (selected.address === tokenIn.address) {
+				handleFlip()
+			} else {
+				setTokenOut(selected)
+			}
 		}
 	}
+
+	const handleSwap = () => {
+		if (needApprove) {
+			approve(amountIn)
+		} else {
+			swap()
+		}
 	}
+
+	const error = swapError || approveError;
 
 	if(!isConnected) {
 		return (
@@ -176,13 +189,7 @@ import { useConnection, useReadContract } from "wagmi";
 			<button
 				disabled={btnDisabled}
 				style={{ ...styles.swapButton, ...(btnDisabled ? styles.swapButtonDisabled : {}) }}
-				onClick={() => {
-					if (needApprove) {
-						approve(amountIn)
-					} else {
-						// swap()
-					}
-				}}	
+				onClick={handleSwap}	
 			>
 				{!amountIn
 				? '输入金额'
