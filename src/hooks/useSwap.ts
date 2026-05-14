@@ -9,9 +9,10 @@ interface UseSwapProps {
     amountIn: string | null;
     amountOut: string | null;
     to: `0x${string}`;
+    slippage: string;
 }
 
-export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to }: UseSwapProps) {
+export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, slippage }: UseSwapProps) {
 
     const { mutate, data: txHash, isPending, error } = useWriteContract()
 
@@ -25,7 +26,7 @@ export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to }: UseSwapP
         const amountOutRaw = parseUnits(amountOut, tokenOut.decimals);
 
         // 0.5% slippage
-        const amountOutMin = amountOutRaw * 995n / 1000n;
+        const amountOutMin = amountOutRaw * BigInt(1000 - Number(slippage)) / 1000n;
 
         // 2 minutes revert
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 2);

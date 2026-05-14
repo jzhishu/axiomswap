@@ -17,6 +17,7 @@ import { injected } from "wagmi/connectors";
 	const [tokenIn, setTokenIn] = useState<TokenInfo>(TOKEN_LIST[0])
 	const [tokenOut, setTokenOut] = useState<TokenInfo>(TOKEN_LIST[1])
 	const [amountIn, setAmountIn] = useState('')
+	const [slippage, setSlippage] = useState('0.5') // 默认 0.5%
 
 	const { address, isConnected } = useConnection();
 	const { mutate: connect, isPending: isConnecting } = useConnect();
@@ -35,7 +36,7 @@ import { injected } from "wagmi/connectors";
 
 	const { allowance, approve, isPending: isApprovePending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
 
-	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address! })
+	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, slippage })
 
 	const needApprove = useMemo(() => {
 		if (!amountIn) return false;
@@ -255,6 +256,25 @@ import { injected } from "wagmi/connectors";
 			{/* === 操作按钮 === */}
 			{renderActionButton()}
 
+			{/* 滑点设置 */}
+			<div style={styles.slippageRow}>
+			<span style={styles.label}>滑点容忍度</span>
+			<div style={styles.slippageOptions}>
+				{['0.1', '0.5', '1.0'].map((v) => (
+				<button
+					key={v}
+					onClick={() => setSlippage(v)}
+					style={{
+					...styles.slippageBtn,
+					...(slippage === v ? styles.slippageBtnActive : {}),
+					}}
+				>
+					{v}%
+				</button>
+				))}
+			</div>
+			</div>
+
 			{/* === 交易错误 === */}
 			{error && (
 				<div style={styles.error}>
@@ -431,4 +451,19 @@ function Spinner() {
 	  animation: 'spin 1s linear infinite',
 	  fontSize: 16,
 	},
+	slippageRow: {
+		display: 'flex', justifyContent: 'space-between',
+		alignItems: 'center', marginTop: 12,
+	  },
+	  slippageOptions: { display: 'flex', gap: 6, alignItems: 'center' },
+	  slippageBtn: {
+		padding: '4px 10px', borderRadius: 8, border: '1px solid #333',
+		backgroundColor: '#16213e', color: '#aaa', cursor: 'pointer', fontSize: 13,
+	  },
+	  slippageBtnActive: { borderColor: '#6c9bff', color: '#6c9bff' },
+	  slippageInput: {
+		width: 60, padding: '4px 8px', borderRadius: 8,
+		border: '1px solid #333', backgroundColor: '#16213e',
+		color: '#fff', fontSize: 13, textAlign: 'center',
+	  },
   }
