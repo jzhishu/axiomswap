@@ -1,7 +1,6 @@
 import { ROUTER_ABI, ROUTER_ADDRESS, TokenInfo } from "@/contracts/contracts";
-import { useMemo } from "react";
 import { parseUnits } from "viem";
-import { useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 
 interface UseSwapProps {
     tokenIn: TokenInfo;
@@ -16,7 +15,12 @@ export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, slippage }
 
     const { mutate, data: txHash, isPending, error } = useWriteContract()
 
-    const { isSuccess, isLoading: isSwapLoading } = useWaitForTransactionReceipt({
+    const {
+        isSuccess,
+        isLoading: isSwapLoading,
+        isError: isReceiptError,
+        error: receiptError,
+    } = useWaitForTransactionReceipt({
         hash: txHash,
     })
 
@@ -39,5 +43,7 @@ export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, slippage }
         })
     }
 
-    return { swap, isPending, error, isSuccess, isSwapLoading };
+    const combinedError = receiptError || error;
+
+    return { swap, isPending, error: combinedError, isSuccess, isSwapLoading, isReceiptError, txHash };
 }

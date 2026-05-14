@@ -21,6 +21,7 @@ interface UseQuoteResult {
     amountOutRaw: bigint | null;
     isLoading: boolean;
     error: string | null;
+    isInsufficientLiquidity: boolean;
 }
 
 export function useQuote ({
@@ -64,5 +65,18 @@ export function useQuote ({
         }
     }, [amountOutRaw, tokenOut.decimals]);
 
-    return { amountOut, amountOutRaw, isLoading, error: error?.message || null };
+    const isInsufficientLiquidity = useMemo(() => {
+        if (!error) return false;
+        const msg = error.message.toLowerCase();
+        return (
+            msg.includes('insufficient_liquidity') ||
+            msg.includes('insufficient liquidity') ||
+            msg.includes('ds-math-sub-underflow') ||
+            msg.includes('pair does not exist') ||
+            // Uniswap V2 合约 revert 编码（0x08c379a0 + "INSUFFICIENT_LIQUIDITY"）
+            (msg.includes('0x') && msg.includes('execution reverted'))
+        );
+    }, [error]);
+
+    return { amountOut, amountOutRaw, isLoading, error: error?.message || null, isInsufficientLiquidity };
 }

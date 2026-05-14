@@ -8,6 +8,7 @@ import { ERC20_ABI, TOKEN_LIST, TokenInfo } from "@/contracts/contracts";
 import { useApprove } from "@/hooks/useApprove";
 import { useQuote } from "@/hooks/useQuote";
 import { useSwap } from "@/hooks/useSwap";
+import { SwapStatusBanner } from "@/components/SwapStatusBanner";
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useConnect, useConnection, useReadContract } from "wagmi";
@@ -32,17 +33,26 @@ import { injected } from "wagmi/connectors";
 		}
 	})
 
-	const { amountOut, isLoading: isQuoteLoading, error: quoteError } = useQuote({tokenIn, tokenOut, amountIn})
+	const { amountOut, isLoading: isQuoteLoading, error: quoteError, isInsufficientLiquidity } = useQuote({tokenIn, tokenOut, amountIn})
 
 	const { allowance, approve, isPending: isApprovePending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
 
-	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, slippage })
+	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading, isReceiptError, txHash } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, slippage })
 
 	const needApprove = useMemo(() => {
 		if (!amountIn) return false;
 		if (!allowance) return true;
 		return BigInt(allowance) < BigInt(parseUnits(amountIn, tokenIn.decimals));
 	}, [allowance, amountIn, tokenIn.decimals]);
+
+	const isInsufficientBalance = useMemo(() => {
+		if (!amountIn || !balanceData || !isConnected) return false;
+		try {
+			return parseUnits(amountIn, tokenIn.decimals) > balanceData;
+		} catch {
+			return false;
+		}
+	}, [amountIn, balanceData, tokenIn.decimals, isConnected]);
 
 	// 切换代币方向（常见 DEX 交互：点击箭头翻转输入输出）
 	const handleFlip = () => {
@@ -75,7 +85,7 @@ import { injected } from "wagmi/connectors";
 		}
 	}
 
-	const error = swapError || approveError;
+	const actionError = swapError || approveError;
 
 	/** 渲染底部操作按钮，根据状态显示不同文案和样式 */
 	const renderActionButton = () => {
@@ -101,11 +111,29 @@ import { injected } from "wagmi/connectors";
 			)
 		}
 
+		// 余额不足
+		if (isInsufficientBalance) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonError }}>
+					余额不足
+				</button>
+			)
+		}
+
 		// 报价加载中
 		if (isQuoteLoading) {
 			return (
 				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonLoading }}>
 					<Spinner /> 获取报价中...
+				</button>
+			)
+		}
+
+		// 流动性不足
+		if (isInsufficientLiquidity) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonError }}>
+					流动性不足
 				</button>
 			)
 		}
@@ -246,13 +274,6 @@ import { injected } from "wagmi/connectors";
 				</div>
 			)}
 
-			{/* === 报价错误 === */}
-			{quoteError && (
-				<div style={styles.error}>
-					⚠ 报价失败：{quoteError.slice(0, 100)}{quoteError.length > 100 ? '...' : ''}
-				</div>
-			)}
-
 			{/* === 操作按钮 === */}
 			{renderActionButton()}
 
@@ -275,19 +296,17 @@ import { injected } from "wagmi/connectors";
 			</div>
 			</div>
 
-			{/* === 交易错误 === */}
-			{error && (
-				<div style={styles.error}>
-					⚠ {error.message.slice(0, 120)}{error.message.length > 120 ? '...' : ''}
-				</div>
-			)}
-
-			{/* === 成功提示 === */}
-			{isSwapSuccess && (
-				<div style={styles.success}>
-					✓ 交换成功！
-				</div>
-			)}
+			{/* === 所有状态提示（错误 / 警告 / 成功）=== */}
+			<SwapStatusBanner
+				quoteError={quoteError}
+				isInsufficientLiquidity={isInsufficientLiquidity}
+				isInsufficientBalance={isInsufficientBalance}
+				tokenInSymbol={tokenIn.symbol}
+				actionError={actionError}
+				isReceiptError={isReceiptError}
+				txHash={txHash}
+				isSwapSuccess={isSwapSuccess}
+			/>
 		</div>
 	)
  }
@@ -388,26 +407,6 @@ function Spinner() {
 	  borderRadius: 8,
 	  textAlign: 'center',
 	},
-	error: {
-	  marginTop: 12,
-	  padding: '10px 14px',
-	  fontSize: 13,
-	  color: '#ff6b6b',
-	  backgroundColor: '#2d1b1b',
-	  borderRadius: 10,
-	  border: '1px solid #5c2020',
-	  lineHeight: 1.5,
-	},
-	success: {
-	  marginTop: 12,
-	  padding: '10px 14px',
-	  fontSize: 13,
-	  color: '#4ade80',
-	  backgroundColor: '#14290e',
-	  borderRadius: 10,
-	  border: '1px solid #1a4a10',
-	  textAlign: 'center',
-	},
 	// 按钮基础样式（共用）
 	swapButton: {
 	  width: '100%',
@@ -440,6 +439,12 @@ function Spinner() {
 	  backgroundColor: '#2a2a3e',
 	  color: '#555',
 	  cursor: 'not-allowed',
+	},
+	swapButtonError: {
+	  backgroundColor: '#3d1a1a',
+	  color: '#ff6b6b',
+	  cursor: 'not-allowed',
+	  border: '1px solid #5c2020',
 	},
 	swapButtonLoading: {
 	  backgroundColor: '#1e3a5f',
