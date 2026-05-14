@@ -8,7 +8,7 @@ import { ERC20_ABI, TOKEN_LIST, TokenInfo } from "@/contracts/contracts";
 import { useApprove } from "@/hooks/useApprove";
 import { useQuote } from "@/hooks/useQuote";
 import { useSwap } from "@/hooks/useSwap";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useConnect, useConnection, useReadContract } from "wagmi";
 import { injected } from "wagmi/connectors";
@@ -21,7 +21,7 @@ import { injected } from "wagmi/connectors";
 	const { address, isConnected } = useConnection();
 	const { mutate: connect, isPending: isConnecting } = useConnect();
 
-	const { data: balanceData } = useReadContract({
+	const { data: balanceData, refetch: refetchBalance } = useReadContract({
 		address: tokenIn.address,
 		abi: ERC20_ABI,
 		functionName: 'balanceOf',
@@ -155,6 +155,12 @@ import { injected } from "wagmi/connectors";
 			</button>
 		)
 	}
+
+	useEffect(() => {
+		if (isSwapSuccess) {
+			refetchBalance()
+		}
+	}, [isSwapSuccess, refetchBalance])
 
 	return (
 		<div style={styles.card}>
