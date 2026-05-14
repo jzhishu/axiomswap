@@ -29,8 +29,9 @@ export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, slippage }
         const amountInRaw = parseUnits(amountIn, tokenIn.decimals);
         const amountOutRaw = parseUnits(amountOut, tokenOut.decimals);
 
-        // 0.5% slippage
-        const amountOutMin = amountOutRaw * BigInt(1000 - Number(slippage)) / 1000n;
+        // slippage tolerance (e.g. "0.5" → 5 basis points, amountOutMin = amountOutRaw * 995 / 1000)
+        const slippageBps = Math.round(Number(slippage) * 10);
+        const amountOutMin = amountOutRaw * BigInt(1000 - slippageBps) / 1000n;
 
         // 2 minutes revert
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 2);
