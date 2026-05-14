@@ -13,7 +13,7 @@ export const ConnectButton = () => {
     const { mutate: disconnect } = useDisconnect()
 
     const { data: balance, isLoading: isBalanceLoading } = useBalance({
-        address, 
+        address,
         chainId: sepolia.id,
         query: {
             enabled: !!address,
@@ -25,7 +25,7 @@ export const ConnectButton = () => {
             <button
                 disabled={isPending}
                 onClick={() => connect({ connector: injected() })}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center h-7 px-2 text-sm font-medium rounded-[6px] bg-ink text-white hover:bg-ink/90 disabled:opacity-50 transition-colors"
             >
                 { isPending ? "Connecting..." : "Connect Wallet" }
             </button>
@@ -36,7 +36,7 @@ export const ConnectButton = () => {
         return (
             <button
                 onClick={() => switchChain({ chainId: sepolia.id })}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+                className="inline-flex items-center h-7 px-2 text-sm font-medium rounded-[6px] bg-error text-white hover:bg-error-deep transition-colors"
             >
                 Switch to Sepolia
             </button>
@@ -47,10 +47,14 @@ export const ConnectButton = () => {
         <button
             disabled={isBalanceLoading}
             onClick={() => disconnect()}
-            className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+            className="inline-flex items-center gap-1.5 h-7 px-2 text-sm font-medium rounded-[6px] bg-canvas text-ink border border-hairline hover:bg-canvas-soft transition-colors"
         >
-            {address?.slice(0, 6) + "..." + address?.slice(-4)} 
-            {isBalanceLoading ? "Loading balance..." : formatUnits(balance?.value ?? 0n, balance?.decimals ?? 0)} {balance?.symbol}
+            <span className="tabular-nums">
+                {address?.slice(0, 6) + "..." + address?.slice(-4)}
+            </span>
+            <span className="text-mute tabular-nums">
+                {isBalanceLoading ? "..." : `${Number(formatUnits(balance?.value ?? 0n, balance?.decimals ?? 0)).toFixed(4)} ${balance?.symbol}`}
+            </span>
         </button>
     )
 }
