@@ -8,9 +8,10 @@ import { ERC20_ABI, TOKEN_LIST, TokenInfo } from "@/contracts/contracts";
 import { useApprove } from "@/hooks/useApprove";
 import { useQuote } from "@/hooks/useQuote";
 import { useSwap } from "@/hooks/useSwap";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useConnection, useReadContract } from "wagmi";
+import { useConnect, useConnection, useReadContract } from "wagmi";
+import { injected } from "wagmi/connectors";
 
  export function SwapCard() {
 	const [tokenIn, setTokenIn] = useState<TokenInfo>(TOKEN_LIST[0])
@@ -18,6 +19,7 @@ import { useConnection, useReadContract } from "wagmi";
 	const [amountIn, setAmountIn] = useState('')
 
 	const { address, isConnected } = useConnection();
+	const { mutate: connect, isPending: isConnecting } = useConnect();
 
 	const { data: balanceData } = useReadContract({
 		address: tokenIn.address,
@@ -31,18 +33,15 @@ import { useConnection, useReadContract } from "wagmi";
 
 	const { amountOut, isLoading: isQuoteLoading, error: quoteError } = useQuote({tokenIn, tokenOut, amountIn})
 
-	const { allowance, approve, isPending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
+	const { allowance, approve, isPending: isApprovePending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
 
-	const { swap, error: swapError, isSuccess: isSwapSuccess } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address! })
+	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address! })
 
 	const needApprove = useMemo(() => {
+		if (!amountIn) return false;
 		if (!allowance) return true;
 		return BigInt(allowance) < BigInt(parseUnits(amountIn, tokenIn.decimals));
 	}, [allowance, amountIn, tokenIn.decimals]);
-	
-	const btnDisabled = useMemo(() => {
-		return !amountIn || isQuoteLoading || isPending
-	}, [amountIn, isQuoteLoading, isPending]);
 
 	// 切换代币方向（常见 DEX 交互：点击箭头翻转输入输出）
 	const handleFlip = () => {
@@ -75,27 +74,91 @@ import { useConnection, useReadContract } from "wagmi";
 		}
 	}
 
-	const handleSwap = () => {
-		if (needApprove) {
-			approve(amountIn)
-		} else {
-			swap()
-		}
-	}
-
 	const error = swapError || approveError;
 
-	if(!isConnected) {
+	/** 渲染底部操作按钮，根据状态显示不同文案和样式 */
+	const renderActionButton = () => {
+		// 未连接钱包
+		if (!isConnected) {
+			return (
+				<button
+					disabled={isConnecting}
+					style={{ ...styles.swapButton, ...styles.connectButton, ...(isConnecting ? styles.swapButtonLoading : {}) }}
+					onClick={() => connect({ connector: injected() })}
+				>
+					{isConnecting ? <><Spinner /> 连接中...</> : '连接钱包'}
+				</button>
+			)
+		}
+
+		// 未输入金额
+		if (!amountIn) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonDisabled }}>
+					输入金额
+				</button>
+			)
+		}
+
+		// 报价加载中
+		if (isQuoteLoading) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonLoading }}>
+					<Spinner /> 获取报价中...
+				</button>
+			)
+		}
+
+		// Approve 等待钱包签名 / 链上确认中
+		if (needApprove && isApprovePending) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonLoading }}>
+					<Spinner /> 授权中...
+				</button>
+			)
+		}
+
+		// 需要 Approve
+		if (needApprove) {
+			return (
+				<button
+					style={{ ...styles.swapButton, ...styles.approveButton }}
+					onClick={() => approve(amountIn)}
+				>
+					授权 {tokenIn.symbol}
+				</button>
+			)
+		}
+
+		// Swap 等待钱包签名
+		if (isSwapPending) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonLoading }}>
+					<Spinner /> 等待钱包确认...
+				</button>
+			)
+		}
+
+		// Swap 链上确认中
+		if (isSwapLoading) {
+			return (
+				<button disabled style={{ ...styles.swapButton, ...styles.swapButtonLoading }}>
+					<Spinner /> 交易上链中...
+				</button>
+			)
+		}
+
+		// 正常 Swap
 		return (
-			<div style={styles.card}>
-				<p style={styles.connectHint}>请先链接钱包</p>
-			</div>
+			<button style={{ ...styles.swapButton, ...styles.swapButtonActive }} onClick={swap}>
+				Swap
+			</button>
 		)
 	}
 
 	return (
 		<div style={styles.card}>
-			<h2 style={styles.title}>SwapCard</h2>
+			<h2 style={styles.title}>Swap</h2>
 
 			{/* === 输入端 === */}
 			<div style={styles.tokenRow}>
@@ -107,7 +170,7 @@ import { useConnection, useReadContract } from "wagmi";
 							onClick={() => setAmountIn(formatUnits(balanceData, tokenIn.decimals ?? 0))}
 							title="点击填入最大余额"
 						>
-							Balance: {formatUnits(balanceData, tokenIn.decimals ?? 0)} {tokenIn.symbol}
+							余额: {formatUnits(balanceData, tokenIn.decimals ?? 0)} {tokenIn.symbol}
 						</span>
 					)}
 				</div>
@@ -118,7 +181,6 @@ import { useConnection, useReadContract } from "wagmi";
 						placeholder="0.0"
 						value={amountIn}
 						onChange={(e) => {
-							// 只允许数字和小数点
 							const val = e.target.value
 							if (/^\d*\.?\d*$/.test(val)) {
 								setAmountIn(val)
@@ -177,34 +239,41 @@ import { useConnection, useReadContract } from "wagmi";
 				</div>
 			)}
 
-			{/* === 错误提示 === */}
+			{/* === 报价错误 === */}
 			{quoteError && (
 				<div style={styles.error}>
-					报价失败：{quoteError.slice(0, 100)}
-					{quoteError.length > 100 ? '...' : ''}
+					⚠ 报价失败：{quoteError.slice(0, 100)}{quoteError.length > 100 ? '...' : ''}
 				</div>
 			)}
 
-			{/* === Swap 按钮（暂不可用，下一步实现） === */}
-			<button
-				disabled={btnDisabled}
-				style={{ ...styles.swapButton, ...(btnDisabled ? styles.swapButtonDisabled : {}) }}
-				onClick={handleSwap}	
-			>
-				{!amountIn
-				? '输入金额'
-				: needApprove
-					? 'Approve'
-					: 'Swap'}
-			</button>
-			{ error && (
+			{/* === 操作按钮 === */}
+			{renderActionButton()}
+
+			{/* === 交易错误 === */}
+			{error && (
 				<div style={styles.error}>
-					{error.message}
+					⚠ {error.message.slice(0, 120)}{error.message.length > 120 ? '...' : ''}
+				</div>
+			)}
+
+			{/* === 成功提示 === */}
+			{isSwapSuccess && (
+				<div style={styles.success}>
+					✓ 交换成功！
 				</div>
 			)}
 		</div>
 	)
  }
+
+/** 简单 loading spinner */
+function Spinner() {
+	return (
+		<span style={styles.spinner} aria-hidden>
+			⟳
+		</span>
+	)
+}
 
  const styles: Record<string, React.CSSProperties> = {
 	card: {
@@ -295,12 +364,25 @@ import { useConnection, useReadContract } from "wagmi";
 	},
 	error: {
 	  marginTop: 12,
-	  padding: '8px 12px',
+	  padding: '10px 14px',
 	  fontSize: 13,
 	  color: '#ff6b6b',
 	  backgroundColor: '#2d1b1b',
-	  borderRadius: 8,
+	  borderRadius: 10,
+	  border: '1px solid #5c2020',
+	  lineHeight: 1.5,
 	},
+	success: {
+	  marginTop: 12,
+	  padding: '10px 14px',
+	  fontSize: 13,
+	  color: '#4ade80',
+	  backgroundColor: '#14290e',
+	  borderRadius: 10,
+	  border: '1px solid #1a4a10',
+	  textAlign: 'center',
+	},
+	// 按钮基础样式（共用）
 	swapButton: {
 	  width: '100%',
 	  marginTop: 16,
@@ -310,15 +392,37 @@ import { useConnection, useReadContract } from "wagmi";
 	  border: 'none',
 	  borderRadius: 12,
 	  cursor: 'pointer',
+	  display: 'flex',
+	  alignItems: 'center',
+	  justifyContent: 'center',
+	  gap: 8,
+	  transition: 'opacity 0.2s',
+	},
+	swapButtonActive: {
+	  backgroundColor: '#3b82f6',
+	  color: '#fff',
+	},
+	connectButton: {
+	  backgroundColor: '#7c3aed',
+	  color: '#fff',
+	},
+	approveButton: {
+	  backgroundColor: '#f59e0b',
+	  color: '#000',
 	},
 	swapButtonDisabled: {
-	  backgroundColor: '#333',
-	  color: '#666',
+	  backgroundColor: '#2a2a3e',
+	  color: '#555',
 	  cursor: 'not-allowed',
 	},
-	connectHint: {
-	  textAlign: 'center',
-	  color: '#888',
-	  padding: 40,
+	swapButtonLoading: {
+	  backgroundColor: '#1e3a5f',
+	  color: '#6c9bff',
+	  cursor: 'not-allowed',
+	},
+	spinner: {
+	  display: 'inline-block',
+	  animation: 'spin 1s linear infinite',
+	  fontSize: 16,
 	},
   }
