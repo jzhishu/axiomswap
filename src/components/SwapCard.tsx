@@ -49,7 +49,14 @@ export function SwapCard() {
 
 	const { allowance, approve, isPending: isApprovePending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
 
-	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading, isReceiptError, txHash } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, slippage })
+	const amountOutMin = useMemo(() => {
+		if (!amountOut) return null;
+		const slippageBps = Math.round(Number(slippage) * 10);
+		const amountOutRaw = parseUnits(amountOut, tokenOut.decimals);
+		return amountOutRaw * BigInt(1000 - slippageBps) / 1000n;
+	}, [amountOut, slippage, tokenOut.decimals]);
+
+	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading, isReceiptError, txHash } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, amountOutMin })
 
 	const needApprove = useMemo(() => {
 		if (!amountIn) return false;
@@ -177,7 +184,7 @@ export function SwapCard() {
 	const config = buttonConfig[buttonState]
 
 	return (
-		<div className="max-w-[420px] mx-auto mt-10 mb-10 p-6 rounded-2xl border border-hairline bg-canvas shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
+		<div className="max-w-[420px] mx-auto mt-30 mb-10 p-6 rounded-2xl border border-hairline bg-canvas shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
 			<h2 className="text-xl font-semibold text-ink tracking-[-0.02em] mb-5 text-center">
 				Swap
 			</h2>
@@ -257,10 +264,27 @@ export function SwapCard() {
 				</div>
 			</div>
 
-			{/* === 汇率显示 === */}
+			{/* === 汇率 & 最小获得详情 === */}
 			{amountOut && amountIn && Number(amountIn) > 0 && (
-				<div className="mt-3 p-2 rounded-lg bg-canvas-soft text-[13px] text-mute text-center">
-					1 {tokenIn.symbol} ≈ {(Number(amountOut) / Number(amountIn)).toFixed(8)} {tokenOut.symbol}
+				<div className="mt-3 rounded-xl border border-hairline bg-canvas-soft overflow-hidden">
+					<div className="flex justify-between items-center px-3 py-2 border-b border-hairline">
+						<span className="text-[12px] font-normal text-mute" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							汇率
+						</span>
+						<span className="text-[12px] font-normal text-body" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							1 {tokenIn.symbol} ≈ {(Number(amountOut) / Number(amountIn)).toFixed(8)} {tokenOut.symbol}
+						</span>
+					</div>
+					{amountOutMin !== null && (
+						<div className="flex justify-between items-center px-3 py-2">
+							<span className="text-[12px] font-normal text-mute" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+								最小获得
+							</span>
+							<span className="text-[12px] font-normal text-body" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+								{formatUnits(amountOutMin, tokenOut.decimals ?? 18)} {tokenOut.symbol}
+							</span>
+						</div>
+					)}
 				</div>
 			)}
 

@@ -8,10 +8,11 @@ interface UseSwapProps {
     amountIn: string | null;
     amountOut: string | null;
     to: `0x${string}`;
-    slippage: string;
+    // slippage: string;
+    amountOutMin: bigint | null;
 }
 
-export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, slippage }: UseSwapProps) {
+export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, amountOutMin }: UseSwapProps) {
 
     const { mutate, data: txHash, isPending, error } = useWriteContract()
 
@@ -25,13 +26,8 @@ export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, slippage }
     })
 
     const swap = () => {
-        if (!amountIn || !amountOut) return;
+        if (!amountIn || !amountOut || !amountOutMin) return;
         const amountInRaw = parseUnits(amountIn, tokenIn.decimals);
-        const amountOutRaw = parseUnits(amountOut, tokenOut.decimals);
-
-        // slippage tolerance (e.g. "0.5" → 5 basis points, amountOutMin = amountOutRaw * 995 / 1000)
-        const slippageBps = Math.round(Number(slippage) * 10);
-        const amountOutMin = amountOutRaw * BigInt(1000 - slippageBps) / 1000n;
 
         // 2 minutes revert
         const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 2);
