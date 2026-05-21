@@ -76,6 +76,49 @@ export const ROUTER_ABI = [
   },
 ] as const
 
+// Factory abi
+export const FACTORY_ABI = [
+  {
+    name: 'getPair',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+    ],
+    outputs: [{ name: 'pair', type: 'address' }],
+  }
+] as const
+
+// Pair abi
+export const PAIR_ABI = [
+  {
+    name: 'getReserves',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'reserve0', type: 'uint112' },
+      { name: 'reserve1', type: 'uint112' },
+      { name: 'blockTimestampLast', type: 'uint32' },
+    ],
+  },
+  {
+    name: 'token0',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    name: 'token1',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  }
+] as const
+
 // ERC-20: balanceOf + allowance + approve
 export const ERC20_ABI = [
   {

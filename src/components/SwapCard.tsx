@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useConnect, useConnection, useReadContract } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { useSwapDetail } from "@/hooks/useSwapDetail";
 
 type ButtonState =
 	| 'connect'
@@ -49,12 +50,7 @@ export function SwapCard() {
 
 	const { allowance, approve, isPending: isApprovePending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
 
-	const amountOutMin = useMemo(() => {
-		if (!amountOut) return null;
-		const slippageBps = Math.round(Number(slippage) * 10);
-		const amountOutRaw = parseUnits(amountOut, tokenOut.decimals);
-		return amountOutRaw * BigInt(1000 - slippageBps) / 1000n;
-	}, [amountOut, slippage, tokenOut.decimals]);
+	const { amountOutMin, priceImpact } = useSwapDetail({ tokenIn, tokenOut, amountIn, slippage, amountOut })
 
 	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading, isReceiptError, txHash } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, amountOutMin })
 
@@ -275,16 +271,30 @@ export function SwapCard() {
 							1 {tokenIn.symbol} ≈ {(Number(amountOut) / Number(amountIn)).toFixed(8)} {tokenOut.symbol}
 						</span>
 					</div>
-					{amountOutMin !== null && (
-						<div className="flex justify-between items-center px-3 py-2">
-							<span className="text-[12px] font-normal text-mute" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-								最小获得
-							</span>
-							<span className="text-[12px] font-normal text-body" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-								{formatUnits(amountOutMin, tokenOut.decimals ?? 18)} {tokenOut.symbol}
-							</span>
-						</div>
-					)}
+				{priceImpact !== null && (
+					<div className="flex justify-between items-center px-3 py-2 border-b border-hairline">
+						<span className="text-[12px] font-normal text-mute" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							价格冲击
+						</span>
+						<span
+							className={`text-[12px] font-normal ${priceImpact > 2 ? 'text-error font-medium' : 'text-body'}`}
+							style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}
+						>
+							{priceImpact > 2 && <span className="mr-0.5">⚠</span>}
+							{priceImpact.toFixed(2)}%
+						</span>
+					</div>
+				)}
+				{amountOutMin !== null && (
+					<div className="flex justify-between items-center px-3 py-2">
+						<span className="text-[12px] font-normal text-mute" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							最小获得
+						</span>
+						<span className="text-[12px] font-normal text-body" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							{formatUnits(amountOutMin, tokenOut.decimals ?? 18)} {tokenOut.symbol}
+						</span>
+					</div>
+				)}
 				</div>
 			)}
 
