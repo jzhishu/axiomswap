@@ -4,14 +4,14 @@
 
 'use client'
 
-import { ERC20_ABI, TOKEN_LIST, TokenInfo } from "@/contracts/contracts";
+import { ERC20_ABI, getTokenList, TokenInfo } from "@/contracts/contracts";
 import { useApprove } from "@/hooks/useApprove";
 import { useQuote } from "@/hooks/useQuote";
 import { useSwap } from "@/hooks/useSwap";
 import { SwapStatusBanner } from "@/components/SwapStatusBanner";
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
-import { useConnect, useConnection, useReadContract } from "wagmi";
+import { useChainId, useConnect, useConnection, useReadContract } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { useSwapDetail } from "@/hooks/useSwapDetail";
 
@@ -28,10 +28,21 @@ type ButtonState =
 	| 'ready';
 
 export function SwapCard() {
-	const [tokenIn, setTokenIn] = useState<TokenInfo>(TOKEN_LIST[0])
-	const [tokenOut, setTokenOut] = useState<TokenInfo>(TOKEN_LIST[1])
+	const chainId = useChainId()
+	const tokenList = getTokenList(chainId)
+
+	const [tokenIn, setTokenIn] = useState<TokenInfo>(() => tokenList[0])
+	const [tokenOut, setTokenOut] = useState<TokenInfo>(() => tokenList[1])
 	const [amountIn, setAmountIn] = useState('')
 	const [slippage, setSlippage] = useState('0.5')
+
+	// 切链时重置 token 选择和输入（React 18 会批量合并这三次 setState）
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	useEffect(() => {
+		setTokenIn(tokenList[0])
+		setTokenOut(tokenList[1])
+		setAmountIn('')
+	}, [chainId])
 
 	const { address, isConnected } = useConnection();
 	const { mutate: connect, isPending: isConnecting } = useConnect();
@@ -45,6 +56,7 @@ export function SwapCard() {
 			enabled: !!address,
 		}
 	})
+	console.log('balanceData', balanceData)
 
 	const { amountOut, isLoading: isQuoteLoading, error: quoteError, isInsufficientLiquidity } = useQuote({ tokenIn, tokenOut, amountIn })
 
@@ -76,7 +88,7 @@ export function SwapCard() {
 	}
 
 	const handleTokenInChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-		const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
+		const selected = tokenList.find((t) => t.address === e.target.value)
 		if (selected) {
 			if (selected.address === tokenOut.address) {
 				handleFlip()
@@ -87,7 +99,7 @@ export function SwapCard() {
 	}
 
 	const handleTokenOutChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-		const selected = TOKEN_LIST.find((t) => t.address === e.target.value)
+		const selected = tokenList.find((t) => t.address === e.target.value)
 		if (selected) {
 			if (selected.address === tokenIn.address) {
 				handleFlip()
@@ -218,16 +230,16 @@ export function SwapCard() {
 						onChange={handleTokenInChange}
 						className="py-2 px-3 text-base font-semibold rounded-lg border border-hairline bg-canvas text-ink cursor-pointer outline-none hover:border-hairline-strong transition-colors"
 					>
-						{TOKEN_LIST.map((token) => (
-							<option key={token.address} value={token.address}>
-								{token.symbol}
-							</option>
-						))}
-					</select>
-				</div>
+					{tokenList.map((token) => (
+						<option key={token.address} value={token.address}>
+							{token.symbol}
+						</option>
+					))}
+				</select>
 			</div>
+		</div>
 
-			{/* === 翻转按钮 === */}
+		{/* === 翻转按钮 === */}
 			<button
 				onClick={handleFlip}
 				className="block mx-auto my-1 p-1.5 text-lg rounded-lg border border-hairline bg-canvas text-ink hover:bg-canvas-soft cursor-pointer transition-colors"
@@ -251,16 +263,16 @@ export function SwapCard() {
 						onChange={handleTokenOutChange}
 						className="py-2 px-3 text-base font-semibold rounded-lg border border-hairline bg-canvas text-ink cursor-pointer outline-none hover:border-hairline-strong transition-colors"
 					>
-						{TOKEN_LIST.map((token) => (
-							<option key={token.address} value={token.address}>
-								{token.symbol}
-							</option>
-						))}
-					</select>
-				</div>
+					{tokenList.map((token) => (
+						<option key={token.address} value={token.address}>
+							{token.symbol}
+						</option>
+					))}
+				</select>
 			</div>
+		</div>
 
-			{/* === 汇率 & 最小获得详情 === */}
+		{/* === 汇率 & 最小获得详情 === */}
 			{amountOut && amountIn && Number(amountIn) > 0 && (
 				<div className="mt-3 rounded-xl border border-hairline bg-canvas-soft overflow-hidden">
 					<div className="flex justify-between items-center px-3 py-2 border-b border-hairline">

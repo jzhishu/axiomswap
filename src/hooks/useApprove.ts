@@ -1,5 +1,5 @@
-import { useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { ERC20_ABI, ROUTER_ADDRESS, TokenInfo } from "../contracts/contracts";
+import { useChainId, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { ERC20_ABI, getContracts, TokenInfo } from "../contracts/contracts";
 import { parseUnits } from "viem";
 import { useEffect, useMemo } from "react";
 
@@ -9,6 +9,8 @@ interface ApproveProps {
 }
 
 export function useApprove({ owner, token }: ApproveProps) {
+    const chainId = useChainId()
+    const { ROUTER_ADDRESS } = getContracts(chainId)
 
     // 查询授权额度
     const { data: allowance, isLoading: isAllowanceLoading, error: allowanceError, refetch: refetchAllowance } = useReadContract({
@@ -49,6 +51,7 @@ export function useApprove({ owner, token }: ApproveProps) {
         if (isApproveSuccess) {
             refetchAllowance()
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isApproveSuccess]);
 
     return { allowance, approve, isPending, error };

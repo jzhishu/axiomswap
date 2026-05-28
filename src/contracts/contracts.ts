@@ -1,11 +1,26 @@
-// Sepolia 测试网 Uniswap V2 合约地址
-// 数据来源：手动从 Etherscan 逐层验证（Router → Factory → Pair → Token）
-
-export const ROUTER_ADDRESS = '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008' as const
-export const FACTORY_ADDRESS = '0x7E0987E5b3a30e3f2828572Bb659A548460a3003' as const
+import { sepolia } from "wagmi/chains"
 
 // ============================================================
-// 代币列表（硬编码，阶段三够用）
+// 按网络区分合约地址
+// ============================================================
+
+const MAINNET_CONTRACTS = {
+  ROUTER_ADDRESS: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D' as `0x${string}`,
+  FACTORY_ADDRESS: '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f' as `0x${string}`,
+}
+
+const SEPOLIA_CONTRACTS = {
+  ROUTER_ADDRESS: '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008' as `0x${string}`,
+  FACTORY_ADDRESS: '0x7E0987E5b3a30e3f2828572Bb659A548460a3003' as `0x${string}`,
+}
+
+export function getContracts(chainId: number) {
+  if (chainId === sepolia.id) return SEPOLIA_CONTRACTS
+  return MAINNET_CONTRACTS // Anvil Local (31337) 和主网都用主网地址
+}
+
+// ============================================================
+// 按网络区分代币列表
 // ============================================================
 export interface TokenInfo {
   address: `0x${string}`
@@ -14,23 +29,52 @@ export interface TokenInfo {
   decimals: number
 }
 
-export const TOKENS: Record<string, TokenInfo> = {
-  WETH: {
+const MAINNET_TOKENS: TokenInfo[] = [
+  {
+    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+    symbol: 'WETH',
+    name: 'Wrapped Ether',
+    decimals: 18,
+  },
+  {
+    address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6,
+  },
+]
+
+const SEPOLIA_TOKENS: TokenInfo[] = [
+  {
     address: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9',
     symbol: 'WETH',
     name: 'Wrapped Ether',
     decimals: 18,
   },
-  PEPE: {
+  {
     address: '0x5e2f3b76cD5df52BBf4bcB9f50003bf769742dc9',
     symbol: 'PEPE',
     name: 'Pepe Token',
     decimals: 18,
   },
-} as const
+  {
+    address: '0xbe188467fD1B470e96a9e1e3D9a173F7086c555E',
+    symbol: 'SMT',
+    name: 'Starmoon',
+    decimals: 18,
+  },
+  {
+    address: '0xa6743A34bf7889fAF2564C29F3339F114Ee55a5F',
+    symbol: 'DX',
+    name: 'DeusEx',
+    decimals: 18,
+  },
+]
 
-// 代币列表数组（给 UI 下拉框用）
-export const TOKEN_LIST: TokenInfo[] = Object.values(TOKENS)
+export function getTokenList(chainId: number): TokenInfo[] {
+  if (chainId === sepolia.id) return SEPOLIA_TOKENS
+  return MAINNET_TOKENS
+}
 
 // ============================================================
 // ABI（只保留用到的方法，不需要完整 ABI）

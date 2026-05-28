@@ -2,8 +2,8 @@
 
 import { useBalance, useChainId, useConnect, useConnection, useDisconnect, useSwitchChain } from "wagmi"
 import { injected } from "wagmi/connectors"
-import { sepolia } from "viem/chains"
 import { formatUnits } from "viem"
+import { wagmiConfig } from "@/config/wagmi" // 根据你的实际路径调整
 
 export const ConnectButton = () => {
     const { address, isConnected } = useConnection()
@@ -12,33 +12,36 @@ export const ConnectButton = () => {
     const { mutate: switchChain } = useSwitchChain()
     const { mutate: disconnect } = useDisconnect()
 
+    // 检查当前链是否在我们支持的链列表中
+    const supportedChainIds = wagmiConfig.chains.map((c) => c.id)
+    const isWrongNetwork = !supportedChainIds.includes(chainId)
+
     const { data: balance, isLoading: isBalanceLoading } = useBalance({
         address,
-        chainId: sepolia.id,
         query: {
-            enabled: !!address,
-        }
+            enabled: !!address && !isWrongNetwork,
+        },
     })
 
-    if(!isConnected) {
+    if (!isConnected) {
         return (
             <button
                 disabled={isPending}
                 onClick={() => connect({ connector: injected() })}
                 className="inline-flex items-center h-7 px-2 text-sm font-medium rounded-[6px] bg-ink text-white hover:bg-ink/90 disabled:opacity-50 transition-colors"
             >
-                { isPending ? "Connecting..." : "Connect Wallet" }
+                {isPending ? "Connecting..." : "Connect Wallet"}
             </button>
         )
     }
 
-    if(chainId !== sepolia.id) {
+    if (isWrongNetwork) {
         return (
             <button
-                onClick={() => switchChain({ chainId: sepolia.id })}
+                onClick={() => switchChain({ chainId: supportedChainIds[0] })}
                 className="inline-flex items-center h-7 px-2 text-sm font-medium rounded-[6px] bg-error text-white hover:bg-error-deep transition-colors"
             >
-                Switch to Sepolia
+                Wrong Network
             </button>
         )
     }
@@ -53,7 +56,9 @@ export const ConnectButton = () => {
                 {address?.slice(0, 6) + "..." + address?.slice(-4)}
             </span>
             <span className="text-mute tabular-nums">
-                {isBalanceLoading ? "..." : `${Number(formatUnits(balance?.value ?? 0n, balance?.decimals ?? 0)).toFixed(4)} ${balance?.symbol}`}
+                {isBalanceLoading
+                    ? "..."
+                    : `${Number(formatUnits(balance?.value ?? 0n, balance?.decimals ?? 0)).toFixed(4)} ${balance?.symbol}`}
             </span>
         </button>
     )

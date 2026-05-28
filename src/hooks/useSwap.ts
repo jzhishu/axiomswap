@@ -1,6 +1,6 @@
-import { ROUTER_ABI, ROUTER_ADDRESS, TokenInfo } from "@/contracts/contracts";
+import { getContracts, ROUTER_ABI, TokenInfo } from "@/contracts/contracts";
 import { parseUnits } from "viem";
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useChainId, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 
 interface UseSwapProps {
     tokenIn: TokenInfo;
@@ -13,6 +13,8 @@ interface UseSwapProps {
 }
 
 export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, amountOutMin }: UseSwapProps) {
+    const chainId = useChainId()
+    const { ROUTER_ADDRESS } = getContracts(chainId)
 
     const { mutate, data: txHash, isPending, error } = useWriteContract()
 

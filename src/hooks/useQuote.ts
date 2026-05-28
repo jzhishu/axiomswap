@@ -2,9 +2,9 @@
  * 汇率查询hook，输入tokenIn和tokenOut，以及对应的amountIn，返回对应的amountOut
  */
 import { useMemo } from "react";
-import { ROUTER_ADDRESS, TokenInfo, ROUTER_ABI } from "../contracts/contracts"
+import { getContracts, TokenInfo, ROUTER_ABI } from "../contracts/contracts"
 import { formatUnits, parseUnits } from "viem";
-import { useReadContract } from "wagmi";
+import { useChainId, useReadContract } from "wagmi";
 
 interface UseQuoteProps {
     // 用户选择的币种
@@ -29,6 +29,9 @@ export function useQuote ({
     tokenOut,
     amountIn,
 }: UseQuoteProps): UseQuoteResult{
+    const chainId = useChainId()
+    const { ROUTER_ADDRESS } = getContracts(chainId)
+
     // 用户输入amountIn先转换为合约格式unit256
     const amountInRaw = useMemo(() => {
         if (!amountIn || Number(amountIn) <= 0) return null;

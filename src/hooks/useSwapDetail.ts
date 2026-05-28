@@ -1,7 +1,7 @@
-import { FACTORY_ABI, FACTORY_ADDRESS, PAIR_ABI, TokenInfo } from "@/contracts/contracts";
+import { FACTORY_ABI, getContracts, PAIR_ABI, TokenInfo } from "@/contracts/contracts";
 import { useMemo } from "react";
 import { parseUnits } from "viem";
-import { useReadContract } from "wagmi";
+import { useChainId, useReadContract } from "wagmi";
 
 interface UseSwapDetailProps {
     tokenIn: TokenInfo;
@@ -12,6 +12,9 @@ interface UseSwapDetailProps {
 }
 
 export function useSwapDetail({ tokenIn, tokenOut, slippage, amountOut, amountIn }: UseSwapDetailProps) {
+
+    const chainId = useChainId()
+    const { FACTORY_ADDRESS } = getContracts(chainId)
 
     const amountOutMin = useMemo(() => {
 		if (!amountOut) return null;
