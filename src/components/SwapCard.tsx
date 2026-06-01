@@ -4,16 +4,16 @@
 
 'use client'
 
-import { ERC20_ABI, getTokenList, TokenInfo } from "@/contracts/contracts";
+import { ERC20_ABI, getTokenList } from "@/contracts/contracts";
 import { useApprove } from "@/hooks/useApprove";
-import { useQuote } from "@/hooks/useQuote";
 import { useSwap } from "@/hooks/useSwap";
 import { SwapStatusBanner } from "@/components/SwapStatusBanner";
 import { useEffect, useMemo, useState } from "react";
 import { formatUnits, parseUnits } from "viem";
 import { useChainId, useConnect, useConnection, useReadContract } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { useSwapDetail } from "@/hooks/useSwapDetail";
+import { useFindBestRoute } from "@/hooks/useFindBestRoute";
+import { usePriceImpact } from "@/hooks/usePriceImpact";
 
 type ButtonState =
 	| 'connect'
@@ -31,18 +31,24 @@ export function SwapCard() {
 	const chainId = useChainId()
 	const tokenList = getTokenList(chainId)
 
-	const [tokenIn, setTokenIn] = useState<TokenInfo>(() => tokenList[0])
-	const [tokenOut, setTokenOut] = useState<TokenInfo>(() => tokenList[1])
-	const [amountIn, setAmountIn] = useState('')
+	const [tokenInAddress, setTokenInAddress] = useState<`0x${string}` | null>(null)
+	const [tokenOutAddress, setTokenOutAddress] = useState<`0x${string}` | null>(null)
+	const [amountInput, setAmountInput] = useState({ chainId, value: '' })
 	const [slippage, setSlippage] = useState('0.5')
 
-	// 切链时重置 token 选择和输入（React 18 会批量合并这三次 setState）
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	useEffect(() => {
-		setTokenIn(tokenList[0])
-		setTokenOut(tokenList[1])
-		setAmountIn('')
-	}, [chainId])
+	const tokenIn = useMemo(() => (
+		tokenList.find((token) => token.address === tokenInAddress) ?? tokenList[0]
+	), [tokenInAddress, tokenList])
+
+	const tokenOut = useMemo(() => {
+		const selectedToken = tokenList.find((token) => token.address === tokenOutAddress)
+		if (selectedToken && selectedToken.address !== tokenIn.address) return selectedToken;
+
+		return tokenList.find((token) => token.address !== tokenIn.address) ?? tokenList[1] ?? tokenList[0];
+	}, [tokenIn.address, tokenList, tokenOutAddress])
+
+	const amountIn = amountInput.chainId === chainId ? amountInput.value : ''
+	const setAmountIn = (value: string) => setAmountInput({ chainId, value })
 
 	const { address, isConnected } = useConnection();
 	const { mutate: connect, isPending: isConnecting } = useConnect();
@@ -58,32 +64,64 @@ export function SwapCard() {
 	})
 	console.log('balanceData', balanceData)
 
-	const { amountOut, isLoading: isQuoteLoading, error: quoteError, isInsufficientLiquidity } = useQuote({ tokenIn, tokenOut, amountIn })
+	const amountInRaw = useMemo(() => {
+		if (!amountIn || Number(amountIn) <= 0) return null;
+		try {
+			return parseUnits(amountIn, tokenIn.decimals);
+		} catch {
+			return null;
+		}
+	}, [amountIn, tokenIn.decimals]);
+
+	// 计算多跳路由
+	const { bestRoute, isLoading: isQuoteLoading, error: quoteError, isInsufficientLiquidity } = useFindBestRoute({
+		tokenIn: tokenIn.address,
+		tokenOut: tokenOut.address,
+		amountIn: amountInRaw,
+	})
+
+	const amountOut = useMemo(() => {
+		if (bestRoute.amountOut <= 0n) return null;
+		try {
+			return formatUnits(bestRoute.amountOut, tokenOut.decimals);
+		} catch {
+			return null;
+		}
+	}, [bestRoute.amountOut, tokenOut.decimals]);
+
+	const routePathLabel = useMemo(() => {
+		return bestRoute.path
+			.map((address) => tokenList.find((token) => token.address === address)?.symbol ?? `${address.slice(0, 6)}...${address.slice(-4)}`)
+			.join(' → ');
+	}, [bestRoute.path, tokenList]);
 
 	const { allowance, approve, isPending: isApprovePending, error: approveError } = useApprove({ owner: address!, token: tokenIn })
 
-	const { amountOutMin, priceImpact } = useSwapDetail({ tokenIn, tokenOut, amountIn, slippage, amountOut })
+    const amountOutMin = useMemo(() => {
+		if (bestRoute.amountOut <= 0n) return null;
+		const slippageBps = Math.round(Number(slippage) * 100);
+		return bestRoute.amountOut * BigInt(10000 - slippageBps) / 10000n;
+	}, [slippage, bestRoute]);
 
-	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading, isReceiptError, txHash } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, amountOutMin })
+    const priceImpact = usePriceImpact({ bestRoute, tokenIn, tokenOut, amountIn: amountInRaw ?? undefined });
+
+
+	const { swap, error: swapError, isSuccess: isSwapSuccess, isPending: isSwapPending, isSwapLoading, isReceiptError, txHash } = useSwap({ tokenIn, tokenOut, amountIn, amountOut, to: address!, amountOutMin, path: bestRoute.path })
 
 	const needApprove = useMemo(() => {
-		if (!amountIn) return false;
+		if (!amountInRaw) return false;
 		if (!allowance) return true;
-		return BigInt(allowance) < BigInt(parseUnits(amountIn, tokenIn.decimals));
-	}, [allowance, amountIn, tokenIn.decimals]);
+		return BigInt(allowance) < amountInRaw;
+	}, [allowance, amountInRaw]);
 
 	const isInsufficientBalance = useMemo(() => {
-		if (!amountIn || !balanceData || !isConnected) return false;
-		try {
-			return parseUnits(amountIn, tokenIn.decimals) > balanceData;
-		} catch {
-			return false;
-		}
-	}, [amountIn, balanceData, tokenIn.decimals, isConnected]);
+		if (!amountInRaw || !balanceData || !isConnected) return false;
+		return amountInRaw > balanceData;
+	}, [amountInRaw, balanceData, isConnected]);
 
 	const handleFlip = () => {
-		setTokenIn(tokenOut)
-		setTokenOut(tokenIn)
+		setTokenInAddress(tokenOut.address)
+		setTokenOutAddress(tokenIn.address)
 		setAmountIn('')
 	}
 
@@ -93,7 +131,7 @@ export function SwapCard() {
 			if (selected.address === tokenOut.address) {
 				handleFlip()
 			} else {
-				setTokenIn(selected)
+				setTokenInAddress(selected.address)
 			}
 		}
 	}
@@ -104,7 +142,7 @@ export function SwapCard() {
 			if (selected.address === tokenIn.address) {
 				handleFlip()
 			} else {
-				setTokenOut(selected)
+				setTokenOutAddress(selected.address)
 			}
 		}
 	}
@@ -114,7 +152,7 @@ export function SwapCard() {
 	/** 确定当前按钮所处的状态 */
 	const buttonState: ButtonState = useMemo(() => {
 		if (!isConnected) return 'connect'
-		if (!amountIn) return 'no-amount'
+		if (!amountInRaw) return 'no-amount'
 		if (isInsufficientBalance) return 'insufficient-balance'
 		if (isQuoteLoading) return 'quote-loading'
 		if (isInsufficientLiquidity) return 'insufficient-liquidity'
@@ -123,7 +161,7 @@ export function SwapCard() {
 		if (isSwapPending) return 'swap-pending'
 		if (isSwapLoading) return 'swap-loading'
 		return 'ready'
-	}, [isConnected, amountIn, isInsufficientBalance, isQuoteLoading, isInsufficientLiquidity, needApprove, isApprovePending, isSwapPending, isSwapLoading])
+	}, [isConnected, amountInRaw, isInsufficientBalance, isQuoteLoading, isInsufficientLiquidity, needApprove, isApprovePending, isSwapPending, isSwapLoading])
 
 	useEffect(() => {
 		if (isSwapSuccess) {
@@ -283,6 +321,14 @@ export function SwapCard() {
 							1 {tokenIn.symbol} ≈ {(Number(amountOut) / Number(amountIn)).toFixed(8)} {tokenOut.symbol}
 						</span>
 					</div>
+					<div className="flex justify-between items-center gap-3 px-3 py-2 border-b border-hairline">
+						<span className="text-[12px] font-normal text-mute shrink-0" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							路径
+						</span>
+						<span className="text-[12px] font-normal text-body text-right" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+							{bestRoute.label} · {routePathLabel}
+						</span>
+					</div>
 				{priceImpact !== null && (
 					<div className="flex justify-between items-center px-3 py-2 border-b border-hairline">
 						<span className="text-[12px] font-normal text-mute" style={{ fontFamily: 'Geist Mono, ui-monospace, SFMono-Regular, Menlo, monospace' }}>
@@ -358,7 +404,7 @@ export function SwapCard() {
 /** 简单 loading spinner */
 function Spinner() {
 	return (
-		<span className="inline-block animate-[spin_1s_linear_infinite] text-base" aria-hidden>
+		<span className="inline-block animate-spin text-base" aria-hidden>
 			⟳
 		</span>
 	)

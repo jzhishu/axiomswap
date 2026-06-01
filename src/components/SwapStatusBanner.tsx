@@ -11,7 +11,7 @@ const EXPLORER_URL = 'https://sepolia.etherscan.io/tx';
 interface SwapStatusBannerProps {
     /** 报价阶段原始错误（字符串） */
     quoteError: string | null;
-    /** 是否流动性不足（由 useQuote 识别） */
+    /** 是否流动性不足（由最佳路由报价识别） */
     isInsufficientLiquidity: boolean;
     /** 是否余额不足 */
     isInsufficientBalance: boolean;

@@ -10,9 +10,10 @@ interface UseSwapProps {
     to: `0x${string}`;
     // slippage: string;
     amountOutMin: bigint | null;
+    path: `0x${string}`[];
 }
 
-export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, amountOutMin }: UseSwapProps) {
+export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, amountOutMin, path}: UseSwapProps) {
     const chainId = useChainId()
     const { ROUTER_ADDRESS } = getContracts(chainId)
 
@@ -38,7 +39,7 @@ export function useSwap({ tokenIn, tokenOut, amountIn, amountOut, to, amountOutM
             address: ROUTER_ADDRESS,
             abi: ROUTER_ABI,
             functionName: 'swapExactTokensForTokens',
-            args: [amountInRaw, amountOutMin, [tokenIn.address, tokenOut.address], to, deadline],
+            args: [amountInRaw, amountOutMin, path, to, deadline],
         })
     }
 

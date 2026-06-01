@@ -2,13 +2,30 @@ import { useChainId, useReadContracts } from "wagmi";
 import { getContracts, getTokenList, ROUTER_ABI } from "@/contracts/contracts";
 import { useMemo } from "react";
 
-export function useFindBestRoute(
-    tokenIn: `0x${string}`,
-    tokenOut: `0x${string}`,
-    amountIn: bigint,
-) {
+interface UseFindBestRouteProps {
+    tokenIn: `0x${string}`;
+    tokenOut: `0x${string}`;
+    amountIn: bigint | null;
+}
+
+interface BestRoute {
+    path: `0x${string}`[];
+    label: string;
+    amountOut: bigint;
+}
+
+interface SortedRoutes {
+    bestRoute: BestRoute;
+    sortedRoutes: BestRoute[];
+    isLoading: boolean;
+    error: string | null;
+    isInsufficientLiquidity: boolean;
+}
+
+export function useFindBestRoute({ tokenIn, tokenOut, amountIn }: UseFindBestRouteProps): SortedRoutes {
     const chainId = useChainId();
     const { ROUTER_ADDRESS } = getContracts(chainId);
+    const shouldQuote = amountIn !== null && amountIn > 0n;
     
     // 路径计算
     const validCandidates = useMemo(() => {
@@ -40,44 +57,70 @@ export function useFindBestRoute(
             address: ROUTER_ADDRESS,
             abi: ROUTER_ABI,
             functionName: 'getAmountsOut',
-            args: [amountIn, c.path],
+            args: [amountIn ?? 0n, c.path],
         })),
         query: {
-            enabled: validCandidates.length > 0 && !!amountIn && amountIn > 0n,
+            enabled: validCandidates.length > 0 && shouldQuote,
         }
     })
 
     const sortedRoutes = useMemo(() => {
-        if(!amounts || amounts.length === 0) return null;
+        if(!amounts || amounts.length === 0) return [];
 
-        const valideRoutes = amounts
-            .map((a, index) => {
-                if(a.status !== 'success') return null;
-                const amountOuts = a.result as bigint[] || [];
-                return {
-                    ...validCandidates[index],
-                    amountOut: amountOuts[amountOuts.length - 1] ?? null,
-                }
-            })
-            .filter((r) => r !== null);
+        const validRoutes = amounts.reduce<BestRoute[]>((routes, quote, index) => {
+            if(quote.status !== 'success') return routes;
 
-        if(valideRoutes.length === 0) return null;
+            const amountOuts = quote.result as bigint[] || [];
+            const amountOut = amountOuts[amountOuts.length - 1];
+            if(!amountOut) return routes;
+
+            routes.push({
+                ...validCandidates[index],
+                amountOut,
+            });
+            return routes;
+        }, []);
+
+        if(validRoutes.length === 0) return [];
         
         // 按照amountOut降序
-        valideRoutes.sort((a, b) => {
-            if(a && b){
-                return (b.amountOut > a.amountOut ? 1 : -1);
-            }
-            return 0;
-        });
+        validRoutes.sort((a, b) => (b.amountOut > a.amountOut ? 1 : -1));
 
-        return valideRoutes;
+        return validRoutes;
     }, [amounts, validCandidates])
 
+    const routeErrors = useMemo(() => {
+        if(!amounts) return [];
+
+        return amounts
+            .filter((quote) => quote.status === 'failure')
+            .map((quote) => quote.error);
+    }, [amounts]);
+
+    const quoteError = error?.message ?? routeErrors[0]?.message ?? null;
+    const isInsufficientLiquidity = useMemo(() => {
+        if(!shouldQuote || isLoading || sortedRoutes.length > 0 || routeErrors.length === 0) return false;
+
+        return routeErrors.every((routeError) => isLiquidityError(routeError.message));
+    }, [isLoading, routeErrors, shouldQuote, sortedRoutes.length]);
+
     return {
-        bestRoute: sortedRoutes?.[0] ?? null,
+        bestRoute: sortedRoutes?.[0] ?? { path: [tokenIn, tokenOut], label: 'Direct Swap', amountOut: 0n },
         sortedRoutes,
         isLoading,
-        error,
+        error: quoteError,
+        isInsufficientLiquidity,
     }
+}
+
+function isLiquidityError(message: string) {
+    const msg = message.toLowerCase();
+    return (
+        msg.includes('insufficient_liquidity') ||
+        msg.includes('insufficient liquidity') ||
+        msg.includes('ds-math-sub-underflow') ||
+        msg.includes('pair does not exist') ||
+        // Uniswap V2 合约 revert 编码（0x08c379a0 + "INSUFFICIENT_LIQUIDITY"）
+        (msg.includes('0x') && msg.includes('execution reverted'))
+    );
 }
